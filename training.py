@@ -1,6 +1,6 @@
 import streamlit as st
 import numpy as np
-from skimage import io, transform
+from skimage import io as ios, transform
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report, confusion_matrix
@@ -8,7 +8,9 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import joblib
 import pandas as pd
-import os
+import io
+
+
 
 # RGB to Luv conversion functions
 def linearize_rgb(rgb):
@@ -65,14 +67,10 @@ def rgb_to_luv(rgb):
     xyz = rgb_to_xyz_illuminant_a(rgb)
     return xyz_to_luv(xyz, reference_white_A)
 
-def convert_image_rgb_to_luv(image_path):
-    img = Image.open(image_path)
-    rgb_array = np.array(img).astype(np.float32) / 255.0
-    luv_array = rgb_to_luv(rgb_array)
-    return luv_array
+
 
 def open_image(image_path):
-    return io.imread(image_path)
+    return ios.imread(image_path)
 
 def create_mask(image, color, tolerance):
     return np.all((image >= color - tolerance) & (image <= color + tolerance), axis=-1).astype(int)
@@ -161,7 +159,7 @@ def process_images(masked_image, original_image, material_name, substrate_name):
     substrate_area = original_image * (1 - (masks["1"] + masks["2"] + masks["3"] + masks["4"] + masks["5"] + masks["6"] + masks["not_segmented"])[:, :, np.newaxis])
     substrate_color = np.array(most_common_color(substrate_area))
     substrate_color_luv = rgb_to_luv(substrate_color[np.newaxis, np.newaxis, :] / 255)[0, 0]
-    xyz_tristimulus_values = rgb_to_xyz_illuminant_a(substrate_color[np.newaxis, np.newaxis, :] / 255)[0, 0]
+    
 
     for key, mask in masks.items():
         if key == "not_segmented" or np.sum(mask) == 0:
@@ -222,15 +220,24 @@ def process_images(masked_image, original_image, material_name, substrate_name):
     rf_model_a.fit(X_train_a, y_train_a)
 
     # Save the model
-    model_name = f"{material_name}-{substrate_name}"
-    os.makedirs("models", exist_ok=True)
-    joblib.dump(rf_model_a, f"models/{model_name}.joblib")
+
 
     # Get predictions and classification report
     y_pred_a = rf_model_a.predict(X_test_a)
     report = classification_report(y_test_a, y_pred_a, output_dict=True)
 
-    return report, y_test_a, y_pred_a, model_name
+    model_name = f"{material_name}-{substrate_name}.joblib"
+    model_bytes = io.BytesIO()
+    joblib.dump(rf_model_a, model_bytes)
+    model_bytes.seek(0)
+
+    # Get predictions and classification report
+    y_pred_a = rf_model_a.predict(X_test_a)
+    report = classification_report(y_test_a, y_pred_a, output_dict=True)
+
+    return report, y_test_a, y_pred_a, model_name, model_bytes
+
+  
 
 def main():
     st.title("Flake Analysis App")
@@ -252,11 +259,21 @@ def main():
                 masked_image = open_image(masked_image_file)
                 original_image = open_image(original_image_file)
 
-                report, y_test_a, y_pred_a, model_name = process_images(masked_image, original_image, material_name, substrate_name)
+                #report, y_test_a, y_pred_a, model_name = process_images(masked_image, original_image, material_name, substrate_name)
+                report, y_test_a, y_pred_a, model_name, model_bytes = process_images(masked_image, original_image, material_name, substrate_name)
+
+               
+
 
                 # Display results
                 st.subheader("Model Performance")
-                st.write(f"Model saved as: models/{model_name}.joblib")
+
+                st.download_button(
+                    label="Download Model",
+                    data=model_bytes,
+                    file_name=model_name,
+                    mime="application/octet-stream"
+                )
 
                 # Display classification report
                 st.write("Classification Report:")
