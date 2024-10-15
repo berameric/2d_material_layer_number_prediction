@@ -1,15 +1,12 @@
 import streamlit as st
 import numpy as np
-from PIL import Image
 from skimage import io, transform
-from skimage.color.colorconv import xyz_tristimulus_values
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report, confusion_matrix
 import matplotlib.pyplot as plt
 import seaborn as sns
 import joblib
-from scipy.ndimage import median_filter
 import pandas as pd
 import os
 
@@ -91,9 +88,9 @@ def most_common_color(image):
     hist_g = np.histogram(green[green != 0], bins=256, range=(0, 256))
     hist_b = np.histogram(blue[blue != 0], bins=256, range=(0, 256))
 
-    hist_r_filtered = median_filter(hist_r[0], size=9)
-    hist_g_filtered = median_filter(hist_g[0], size=9)
-    hist_b_filtered = median_filter(hist_b[0], size=9)
+    hist_r_filtered = hist_r[0]
+    hist_g_filtered = hist_g[0]
+    hist_b_filtered = hist_b[0]
 
     hist_r_normalized = hist_r_filtered / np.sum(hist_r_filtered)
     hist_g_normalized = hist_g_filtered / np.sum(hist_g_filtered)
