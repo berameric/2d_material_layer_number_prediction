@@ -8,3 +8,4 @@ scipy
 seaborn
 streamlit
 scikit_image
+opencv_python

@@ -9,6 +9,7 @@ import seaborn as sns
 import joblib
 import pandas as pd
 import io
+import cv2 as cv
 
 
 
@@ -21,27 +22,17 @@ def linearize_rgb(rgb):
 
 def rgb_to_xyz_illuminant_a(rgb):
     rgb_linear = linearize_rgb(rgb)
-
-
-
-
-
     matrix = np.array([
         [0.4002, 0.7075, -0.0808],
         [-0.2263, 1.1653, 0.0457],
         [0.0000, 0.0000, 0.8253]
     ])
-
-
-
-
-
     return np.dot(rgb_linear, matrix.T)
 
-def xyz_to_luv(xyz, reference_white):
-    xyz = np.maximum(xyz, 1e-6)  # Avoid division by zero
-    Xr, Yr, Zr = reference_white
 
+def xyz_to_luv(xyz, reference_white):
+    xyz = np.maximum(xyz, 1e-6)
+    Xr, Yr, Zr = reference_white
     L = np.where(xyz[:,:,1]/Yr > 216/24389,
                  116 * (xyz[:,:,1]/Yr)**(1/3) - 16,
                  24389/27 * xyz[:,:,1]/Yr)
@@ -58,6 +49,7 @@ def xyz_to_luv(xyz, reference_white):
 
     return np.dstack((L, u, v))
 
+
 def rgb_to_luv(rgb):
     reference_white_A = np.array([1.09850, 1.00000, 0.35585])
     xyz = rgb_to_xyz_illuminant_a(rgb)
@@ -69,56 +61,24 @@ def open_image(image_path):
     return ios.imread(image_path)
 
 def create_mask(image, color, tolerance):
-    return np.all((image >= color - tolerance) & (image <= color + tolerance), axis=-1).astype(int)
+    lower_bound = color - tolerance
+    upper_bound = color + tolerance
+    mask = np.logical_and(image >= lower_bound, image <= upper_bound)
+    return np.all(mask, axis=-1).astype(int)
 
 def most_common_color(image):
     image = image.reshape(-1, 3)
     mask = ~((image == [255, 255, 255]).all(axis=1) | (image == [0, 0, 0]).all(axis=1))
     image = image[mask]
 
-    red, green, blue = image[:, 0], image[:, 1], image[:, 2]
+    hist, edges = np.histogramdd(image, bins=256, range=((0, 256), (0, 256), (0, 256)))
 
-    hist_r = np.histogram(red[red != 0], bins=256, range=(0, 256))
-    hist_g = np.histogram(green[green != 0], bins=256, range=(0, 256))
-    hist_b = np.histogram(blue[blue != 0], bins=256, range=(0, 256))
+    weighted_mean = [np.average(edges[i][:-1], weights=np.sum(hist, axis=tuple(j for j in range(3) if j != i)))
+                     for i in range(3)]
 
-    hist_r_filtered = hist_r[0]
-    hist_g_filtered = hist_g[0]
-    hist_b_filtered = hist_b[0]
+    return tuple(map(round, weighted_mean))
 
-    hist_r_normalized = hist_r_filtered / np.sum(hist_r_filtered)
-    hist_g_normalized = hist_g_filtered / np.sum(hist_g_filtered)
-    hist_b_normalized = hist_b_filtered / np.sum(hist_b_filtered)
 
-    weighted_mean_red = np.average(hist_r[1][:-1], weights=hist_r_normalized)
-    weighted_mean_green = np.average(hist_g[1][:-1], weights=hist_g_normalized)
-    weighted_mean_blue = np.average(hist_b[1][:-1], weights=hist_b_normalized)
-
-    return (round(weighted_mean_red), round(weighted_mean_green), round(weighted_mean_blue))
-
-def iterative_weighted_mean(delta_e, iterations=10, bins=100, hist_range=(1, 100)):
-    hist, bin_edges = np.histogram(delta_e, bins=bins, range=hist_range)
-    hist_filtered = hist.copy()
-    weighted_means = []
-
-    for _ in range(iterations):
-        hist_normalized = hist_filtered / np.sum(hist_filtered)
-        weighted_mean = np.average(bin_edges[:-1], weights=hist_normalized)
-        weighted_means.append(weighted_mean)
-        most_common_index = np.argmax(hist_filtered)
-        hist_filtered[most_common_index] = 0
-
-    hist_filtered = hist.copy()
-
-    for _ in range(iterations):
-        hist_normalized = hist_filtered / np.sum(hist_filtered)
-        weighted_mean = np.average(bin_edges[:-1], weights=hist_normalized)
-        weighted_means.append(weighted_mean)
-        least_common_index = np.argmin(hist_filtered + (hist_filtered == 0) * np.inf)
-        hist_filtered[least_common_index] = 0
-
-    mean = np.mean(bin_edges)
-    return weighted_means, mean
 
 def process_images(masked_image, original_image, material_name, substrate_name):
     # Make sure original image matches mask size
@@ -126,6 +86,10 @@ def process_images(masked_image, original_image, material_name, substrate_name):
         original_image = transform.resize(original_image, masked_image.shape,
                                           anti_aliasing=True,
                                           preserve_range=True).astype(masked_image.dtype)
+        
+    # resize 2 image sto 50% of their original size
+    masked_image = cv.resize(masked_image, (0, 0), fx=0.5, fy=0.5, interpolation=cv.INTER_AREA)
+    original_image = cv.resize(original_image, (0, 0), fx=0.5, fy=0.5, interpolation=cv.INTER_AREA)
 
     # [Include the mask creation code here]
     monolayer_mask_color = np.array([0, 0, 254])
@@ -199,16 +163,19 @@ def process_images(masked_image, original_image, material_name, substrate_name):
     X_a = df_a[['delta_e_L', 'delta_e_L_squared', 'delta_e_u', 'delta_e_u_squared', 'delta_e_v', 'delta_e_v_squared']]
     y_a = df_a['layer']
 
+    print("model started to train")
+
     X_train_a, X_test_a, y_train_a, y_test_a = train_test_split(X_a, y_a, test_size=0.20, random_state=42, stratify=y_a, shuffle=True)
 
     rf_model_a = RandomForestClassifier(
-        n_estimators=100,
-        max_depth=None,
+        n_estimators=200,
+        max_depth=20,
         min_samples_split=5,
         min_samples_leaf=2,
-        max_features="sqrt",
+        max_features=0.75,
         bootstrap=True,
-        random_state=42
+        random_state=42,
+        n_jobs=-1
     )
 
     rf_model_a.fit(X_train_a, y_train_a)
