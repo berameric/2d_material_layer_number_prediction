@@ -17,11 +17,7 @@ def linearize_rgb(rgb):
     rgb = np.where(rgb <= 0.04045, rgb / 12.92, ((rgb + 0.055) / 1.055) ** 2.4)
     return rgb
 
-def rgb_to_xyz(rgb_linear):
-    M = np.array([[0.4124564, 0.3575761, 0.1804375],
-                  [0.2126729, 0.7151522, 0.0721750],
-                  [0.0193339, 0.1191920, 0.9503041]])
-    return np.dot(rgb_linear, M.T)
+
 
 def rgb_to_xyz_illuminant_a(rgb):
     rgb_linear = linearize_rgb(rgb)
@@ -179,13 +175,11 @@ def process_images(masked_image, original_image, material_name, substrate_name):
         u_part = layer_area_luv[:, 1]
         v_part = layer_area_luv[:, 2]
 
-        delta_e_l_squared = (l_part** 2 - substrate_color_luv[0]** 2)
-        delta_e_u_squared = (u_part** 2 - substrate_color_luv[1]** 2)
-        delta_e_v_squared = (v_part** 2 - substrate_color_luv[2]** 2)
+        delta_e_l = (l_part - substrate_color_luv[0])
+        delta_e_u = (u_part - substrate_color_luv[1])
+        delta_e_v = (v_part - substrate_color_luv[2])
 
-        delta_e_l = np.sqrt(delta_e_l_squared)
-        delta_e_u = np.sqrt(delta_e_u_squared)
-        delta_e_v = np.sqrt(delta_e_v_squared)
+
 
         variables_b[0].extend(delta_e_l)
         variables_b[1].extend(delta_e_u)
