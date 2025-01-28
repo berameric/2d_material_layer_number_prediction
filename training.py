@@ -122,7 +122,7 @@ def process_images(masked_image, original_image, material_name, substrate_name):
     
 
     for key, mask in masks.items():
-        if key == "not_segmented" or np.sum(mask) == 0:
+        if np.sum(mask) == 0:
             continue
 
         layer_area = original_image * mask[:, :, np.newaxis]
