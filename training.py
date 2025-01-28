@@ -160,7 +160,7 @@ def process_images(masked_image, original_image, material_name, substrate_name):
     df_a['delta_e_u_squared'] = df_a['delta_e_u'] ** 2
     df_a['delta_e_v_squared'] = df_a['delta_e_v'] ** 2
 
-    X_a = df_a[['delta_e_L', 'delta_e_L_squared', 'delta_e_u', 'delta_e_u_squared', 'delta_e_v', 'delta_e_v_squared']]
+    X_a = df_a[['delta_e_L', 'delta_e_L_squared', 'delta_e_u']]
     y_a = df_a['layer']
 
     print("model started to train")
