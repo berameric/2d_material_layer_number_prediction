@@ -109,14 +109,14 @@ def process_images(masked_image, original_image, material_name, substrate_name):
         "4": create_mask(masked_image, fourlayer_mask_color, tolerance),
         "5": create_mask(masked_image, five_layer_mask_color, tolerance),
         "6": create_mask(masked_image, sixlayer_mask_color, tolerance),
-        "not_segmented": create_mask(masked_image, not_segmented_color, tolerance)
+        "7": create_mask(masked_image, not_segmented_color, tolerance)
     }
 
     # [Include the data processing code here]
     variables_b = [[], [], []]
     targets_b = []
 
-    substrate_area = original_image * (1 - (masks["1"] + masks["2"] + masks["3"] + masks["4"] + masks["5"] + masks["6"] + masks["not_segmented"])[:, :, np.newaxis])
+    substrate_area = original_image * (1 - (masks["1"] + masks["2"] + masks["3"] + masks["4"] + masks["5"] + masks["6"] + masks["7"])[:, :, np.newaxis])
     substrate_color = np.array(most_common_color(substrate_area))
     substrate_color_luv = rgb_to_luv(substrate_color[np.newaxis, np.newaxis, :] / 255)[0, 0]
     
