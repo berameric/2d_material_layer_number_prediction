@@ -13,39 +13,39 @@ import cv2 as cv
 
 
 def linearize_rgb(rgb):
-    rgb = np.where(rgb <= 0.04045, rgb / 12.92, ((rgb + 0.055) / 1.055) ** 2.4)
-    return rgb
+    rgb = rgb / 255.0  # 0-255 ölçeğini 0-1'e çevir
+    return np.where(rgb <= 0.04045, rgb / 12.92, ((rgb + 0.055) / 1.055) ** 2.4)
 
 def rgb_to_xyz_illuminant_a(rgb):
     rgb_linear = linearize_rgb(rgb)
-    matrix = np.array([
-        [0.4002, 0.7075, -0.0808],
-        [-0.2263, 1.1653, 0.0457],
-        [0.0000, 0.0000, 0.8253]
-    ])
-
-    return np.dot(rgb_linear, matrix.T)
-
-
+    matrix = np.array([[0.4965, 0.2520, 0.6000],
+                       [0.2560, 0.5040, 0.2400],
+                       [0.0233, 0.0840, 3.1600]])
+    if rgb_linear.ndim == 1:  # Tek piksel
+        return np.dot(rgb_linear, matrix)
+    else:  # Görüntü: [height, width, 3]
+        return np.einsum('ijk,kl->ijl', rgb_linear, matrix)
 
 def xyz_to_luv(xyz, reference_white):
     xyz = np.maximum(xyz, 1e-6)
     Xr, Yr, Zr = reference_white
-    L = np.where(xyz[:,:,1]/Yr > 216/24389,
-                 116 * (xyz[:,:,1]/Yr)**(1/3) - 16,
-                 24389/27 * xyz[:,:,1]/Yr)
+    Y_ratio = xyz[..., 1] / Yr
+    L = np.where(Y_ratio > (6/29)**3,
+                 116 * Y_ratio**(1/3) - 16,
+                 (29/3)**3 * Y_ratio / 27)
 
-    d = xyz[:,:,0] + 15 * xyz[:,:,1] + 3 * xyz[:,:,2]
+    d = xyz[..., 0] + 15 * xyz[..., 1] + 3 * xyz[..., 2]
+    d = np.maximum(d, 1e-6)
     ur_prime = 4 * Xr / (Xr + 15 * Yr + 3 * Zr)
     vr_prime = 9 * Yr / (Xr + 15 * Yr + 3 * Zr)
 
-    u_prime = 4 * xyz[:,:,0] / d
-    v_prime = 9 * xyz[:,:,1] / d
+    u_prime = 4 * xyz[..., 0] / d
+    v_prime = 9 * xyz[..., 1] / d
 
     u = 13 * L * (u_prime - ur_prime)
     v = 13 * L * (v_prime - vr_prime)
 
-    return np.dstack((L, u, v))
+    return np.stack((L, u, v), axis=-1)
 
 def rgb_to_luv(rgb):
     reference_white_A = np.array([1.09850, 1.00000, 0.35585])
