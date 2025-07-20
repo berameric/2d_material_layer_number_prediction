@@ -18,9 +18,9 @@ def linearize_rgb(rgb):
 
 def rgb_to_xyz_illuminant_a(rgb):
     rgb_linear = linearize_rgb(rgb)
-    matrix = np.array(    [0.5223, 0.4959, 0.0803],
+    matrix = np.array(   [ [0.5223, 0.4959, 0.0803],
         [0.1779, 0.8123, 0.1163],
-        [0.0156, 0.0153, 0.2979])
+        [0.0156, 0.0153, 0.2979]])
     
     if rgb_linear.ndim == 1:  # Tek piksel
         return np.dot(rgb_linear, matrix)
